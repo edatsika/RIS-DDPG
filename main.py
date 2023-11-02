@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 import DDPG
 import utils
@@ -26,17 +27,17 @@ if __name__ == "__main__":
     parser.add_argument("--seed", default=0, type=int, help='Seed number for PyTorch and NumPy (default: 0)')
     parser.add_argument("--gpu", default="0", type=int, help='GPU ordinal for multi-GPU computers (default: 0)')
     parser.add_argument("--start_time_steps", default=0, type=int, metavar='N', help='Number of exploration time steps sampling random actions (default: 0)')
-    parser.add_argument("--buffer_size", default=100000, type=int, help='Size of the experience replay buffer (default: 100000)')
+    parser.add_argument("--buffer_size", default=1000, type=int, help='Size of the experience replay buffer (default: 100000)')
     parser.add_argument("--batch_size", default=16, metavar='N', help='Batch size (default: 16)')
     parser.add_argument("--save_model", action="store_true", help='Save model and optimizer parameters')
     parser.add_argument("--load_model", default="", help='Model load file name; if empty, does not load')
 
     # Environment-specific parameters
-    parser.add_argument("--num_antennas", default=4, type=int, metavar='N', help='Number of antennas in the BS')
+    parser.add_argument("--num_RIS", default=4, type=int, metavar='N', help='Number of antennas in the BS')
     parser.add_argument("--num_RIS_elements", default=4, type=int, metavar='N', help='Number of RIS elements')
     parser.add_argument("--num_users", default=4, type=int, metavar='N', help='Number of users')
-    parser.add_argument("--power_t", default=30, type=float, metavar='N', help='Transmission power for the constrained optimization in dB')
-    parser.add_argument("--num_time_steps_per_eps", default=10000, type=int, metavar='N', help='Maximum number of steps per episode (default: 20000)')
+    parser.add_argument("--power_t", default=5, type=float, metavar='N', help='Transmission power for the constrained optimization in dB (default: 30)')
+    parser.add_argument("--num_time_steps_per_eps", default=5000, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
     parser.add_argument("--num_eps", default=10, type=int, metavar='N', help='Maximum number of episodes (default: 5000)')
     parser.add_argument("--awgn_var", default=1e-2, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 0.01)')
     parser.add_argument("--channel_est_error", default=False, type=bool, help='Noisy channel estimate? (default: False)')
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     print(f"Policy: {args.policy}, Env: {args.env}, Seed: {args.seed}")
     print("---------------------------------------")
 
-    file_name = f"{args.num_antennas}_{args.num_RIS_elements}_{args.num_users}_{args.power_t}_{args.lr}_{args.decay}"
+    file_name = f"{args.num_RIS}_{args.num_RIS_elements}_{args.num_users}_{args.power_t}_{args.lr}_{args.decay}"
 
     if not os.path.exists(f"./Learning Curves/{args.experiment_type}"):
         os.makedirs(f"./Learning Curves/{args.experiment_type}")
@@ -62,7 +63,7 @@ if __name__ == "__main__":
     if args.save_model and not os.path.exists("./Models"):
         os.makedirs("./Models")
 
-    env = environment.RIS_MISO(args.num_antennas, args.num_RIS_elements, args.num_users, AWGN_var=args.awgn_var)
+    env = environment.RIS_MISO(args.num_RIS, args.num_RIS_elements, args.num_users, args.power_t, AWGN_var=args.awgn_var)
 
     # Set seeds
     torch.manual_seed(args.seed)
@@ -79,7 +80,7 @@ if __name__ == "__main__":
         "action_dim": action_dim,
         "power_t": args.power_t,
         "max_action": max_action,
-        "M": args.num_antennas,
+        "M": args.num_RIS,
         "N": args.num_RIS_elements,
         "K": args.num_users,
         "actor_lr": args.lr,
@@ -105,23 +106,58 @@ if __name__ == "__main__":
 
     max_reward = 0
 
+    # Define the interval for saving aggregated statistics ---edatsika
+    save_interval = 2
+    rho_k_log = []
+    theta_kmn_log = []
+    sum_rate_log = []
+    cumulative_rewards = []
+
     for eps in range(int(args.num_eps)):
         state, done = env.reset(), False
         episode_reward = 0
         episode_num = 0
         episode_time_steps = 0
 
+        #edatsika
+        episode_rho_k_log = []
+        episode_theta_kmn_log = []
+        episode_sum_rate = 0
+
         state = whiten(state)
 
         eps_rewards = []
 
+        # edatsika
+        episode_rewards = []
+        cumulative_reward = 0
+
         for t in range(int(args.num_time_steps_per_eps)):
             # Choose action from the policy
             action = agent.select_action(np.array(state))
-
+            #print(f">>>>>>>>>>>>>>>>>>>>>> Episode {eps}, Step {t}, Action shape {action.shape}, Action before: {action[:, :env.K]}")
+            #print(f">>>>>>>>>>>>>>>>>>>>>> State shape {state.shape}, State before: {state[:env.K]}")
+            #if np.any(state[:env.K] < 0):
+            #    input("Press Enter to continue...")
             # Take the selected action
             next_state, reward, done, _ = env.step(action)
+            #print(f">>>>>>>>>>>>>>>>>>>>>> Episode {eps}, Step {t}, Action shape {action.shape}, Action after env.step in main: {action}")
+            #print(f">>>>>>>>>>>>>>>>>>>>>> State shape {state.shape}, State after env.step in main: {state[:env.K]}")
+            #print("rho_k values after step:", env.rho_k)
+            #input("Press Enter to continue...")
+            #print("theta_kmn values after step:", env.theta_kmn)
 
+            #edatsika
+            episode_rho_k_log.append(env.rho_k)
+            episode_theta_kmn_log.append(env.theta_kmn)
+
+            nan_indices = np.isnan(action)
+            if nan_indices.any():
+                nan_positions = np.argwhere(nan_indices)
+                #print("AFTER STEP NaN values found at positions:", nan_positions)
+                print("rho_k values right after step:", env.rho_k)
+                input("NaN - Press Enter to continue...")
+            
             done = 1.0 if t == args.num_time_steps_per_eps - 1 else float(done)
 
             # Store data in the experience replay buffer
@@ -129,6 +165,8 @@ if __name__ == "__main__":
 
             state = next_state
             episode_reward += reward
+            #edatsika
+            episode_sum_rate += reward
 
             state = whiten(state)
 
@@ -138,18 +176,21 @@ if __name__ == "__main__":
             # Train the agent
             agent.update_parameters(replay_buffer, args.batch_size)
 
-            print(f"Time step: {t + 1} Episode Num: {episode_num + 1} Reward: {reward:.3f}")
+            #print(f"Time step: {t + 1} Episode Num: {episode_num + 1} Reward: {reward:.3f}")
 
             eps_rewards.append(reward)
 
             episode_time_steps += 1
 
-            if done:
-                print(f"\nTotal T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_time_steps} Max. Reward: {max_reward:.3f}\n")
+            #edatsika
+            cumulative_reward += max_reward
 
+            if done:
+                #print(f"\nTotal T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_time_steps} Max. Reward: {max_reward:.3f}\n")
+                #print(f"\nEpisode Num: {eps} Episode T: {t} Max. Reward: {max_reward:.3f}\n")
                 # Reset the environment
                 state, done = env.reset(), False
-                episode_reward = 0
+                #episode_reward = 0
                 episode_time_steps = 0
                 episode_num += 1
 
@@ -157,7 +198,76 @@ if __name__ == "__main__":
 
                 instant_rewards.append(eps_rewards)
 
-                np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", instant_rewards)
+                # commented by edatsika
+                #np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", instant_rewards)
+        
+        cumulative_rewards.append(episode_reward)
+    
+        rho_k_log.append(episode_rho_k_log)
+        theta_kmn_log.append(episode_theta_kmn_log)
+        sum_rate_log.append(episode_sum_rate)
+        print(f"\nTotal T: {t} Episode Num: {eps} Max. Reward: {max_reward:.3f}\n")
+        
+        # Append the cumulative reward to the list of episode rewards
+        episode_rewards.append(cumulative_reward)
+        # Save aggregated statistics every N episodes
+        if (episode_num + 1) % save_interval == 0:
+            mean_reward = np.mean(episode_rewards[-save_interval:])  # Calculate mean of last N episodes
+            std_reward = np.std(episode_rewards[-save_interval:])    # Calculate standard deviation
+            aggregated_stats = {
+                'episode': episode_num + 1,
+                'mean_reward': mean_reward,
+                'std_reward': std_reward
+            }
+            #np.save('aggregated_stats.npy', aggregated_stats)
+            try:
+                np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", aggregated_stats)
+            except Exception as e:
+                # Print the exception or handle it as needed
+                print(f"Error saving results: {e}")
+    
+    #edatsika
+    # After training, identify the episode with the maximum sum_rate
+    max_sum_rate_episode = np.argmax(sum_rate_log)
+
+    # Extract the corresponding values of rho_k and theta_kmn
+    max_rho_k = rho_k_log[max_sum_rate_episode]
+    max_theta_kmn = theta_kmn_log[max_sum_rate_episode]
+
+    # Print or use the values as needed
+    print(f"Max Sum Rate: {sum_rate_log[max_sum_rate_episode]}")
+    print(f"Optimal rho_k: {max_rho_k}")
+    #print(f"Optimal theta_kmn: {max_theta_kmn}")
+
+    file_path = f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}.npy"
+    #loaded_data = np.load(file_path, allow_pickle=True) put back causes error
+    #print(loaded_data)
+    
+    # edatsika
+    # Convert the rewards list to a NumPy array for further analysis or plotting
+    rewards_array = np.array(instant_rewards)
+    #print("Rewards array:", rewards_array.shape)
+    print("Rewards array:", cumulative_rewards)
+
+    # Create x-axis values for all steps and episodes
+    #x_values = np.arange(episode_num * episode_time_steps)
+    # Flatten rewards_array
+    flat_rewards = rewards_array.flatten()
+    # Plot the rewards for all steps and episodes
+    x_values = np.arange(flat_rewards.shape[0])
+    plt.plot(x_values, flat_rewards)
+
+    plt.xlabel("Step and Episode")
+    plt.ylabel("Reward")
+    plt.title("Reward for All Steps and Episodes")
+    plt.show()
+
+    # Plot cumulative reward over episodes
+    plt.plot(range(int(args.num_eps)), cumulative_rewards)
+    plt.xlabel("Episode")
+    plt.ylabel("Cumulative Reward")
+    plt.title("Cumulative Reward over Episodes")
+    plt.show()
 
     if args.save_model:
         agent.save(f"./Models/{file_name}")

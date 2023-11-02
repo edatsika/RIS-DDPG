@@ -1,4 +1,4 @@
-# Joint Transmit Beamforming and Phase Shifts Design with Deep Reinforcement Learning
+# Joint MAC design and RIS phase configuration with DDPG (modified version allocates Ptx in uplink and RIS phase shifts)
 
 PyTorch implementation of the paper [*Reconfigurable Intelligent Surface Assisted Multiuser MISO Systems Exploiting Deep Reinforcement Learning*](https://ieeexplore.ieee.org/document/9110869). The paper solves a Reconfigurable Intelligent Surface (RIS) Assisted Multiuser Multi-Input Single-Output (MISO) System problem with the deep reinforcement learning algorithm of [DDPG](https://arxiv.org/abs/1509.02971) for sixth generation (6G) applications.
 

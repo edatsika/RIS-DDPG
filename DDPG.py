@@ -14,6 +14,9 @@ class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, M, N, K, power_t, device, max_action=1):
         super(Actor, self).__init__()
         hidden_dim = 1 if state_dim == 0 else 2 ** (state_dim - 1).bit_length()
+        #hidden_dim = state_dim
+        #print("state_dim:", state_dim)
+        #print("hidden_dim:", hidden_dim)
 
         self.device = device
 
@@ -31,46 +34,63 @@ class Actor(nn.Module):
 
         self.max_action = max_action
 
-    def compute_power(self, a):
-        # Normalize the power
-        G_real = a[:, :self.M ** 2].cpu().data.numpy()
-        G_imag = a[:, self.M ** 2:2 * self.M ** 2].cpu().data.numpy()
 
-        G = G_real.reshape(G_real.shape[0], self.M, self.K) + 1j * G_imag.reshape(G_imag.shape[0], self.M, self.K)
+    def forward(self, state):          
 
-        GG_H = np.matmul(G, np.transpose(G.conj(), (0, 2, 1)))
+        #print("Input Shape:", state.shape)
+        actor_state_dict = self.state_dict()
+        # Print the weight tensors in the actor network
+        #for name, param in actor_state_dict.items():
+        #    if 'weight' in name:
+                #print(f"Layer: {name}, Shape: {param.shape}")
 
-        current_power_t = torch.sqrt(torch.from_numpy(np.real(np.trace(GG_H, axis1=1, axis2=2)))).reshape(-1, 1).to(self.device)
-
-        return current_power_t
-
-    def compute_phase(self, a):
-        # Normalize the phase matrix
-        Phi_real = a[:, -2 * self.N:-self.N].detach()
-        Phi_imag = a[:, -self.N:].detach()
-
-        return torch.sum(torch.abs(Phi_real), dim=1).reshape(-1, 1) * np.sqrt(2), torch.sum(torch.abs(Phi_imag), dim=1).reshape(-1, 1) * np.sqrt(2)
-
-    def forward(self, state):
         a = torch.tanh(self.l1(state.float()))
-
+        #a = self.l1(state.float())
+        #print("a shape in FW:", a.shape)
+        nan_indices = np.isnan(a.detach())
+        if nan_indices.any():
+            print("Inside FW after l1 (state before l1):", state.float())
+            print("Inside FW after l1:", a)
+            input("Press Enter to continue...")
         # Apply batch normalization to the each hidden layer's input
         a = self.bn1(a)
+
         a = torch.tanh(self.l2(a))
+        #a = F.sigmoid(self.l2(a)) 
+        #print("a shape in FW:", a.shape)
 
         a = self.bn2(a)
         a = torch.tanh(self.l3(a))
+        #a = F.sigmoid(self.l3(a))
+        #print("a shape in FW:", a.shape)
 
-        # Normalize the transmission power and phase matrix
-        current_power_t = self.compute_power(a.detach()).expand(-1, 2 * self.M ** 2) / np.sqrt(self.power_t)
+        #action is: self.rho_k, self.a_km.reshape(-1), theta_kmn_real, theta_kmn_imag)
 
-        real_normal, imag_normal = self.compute_phase(a.detach())
+        # Normalize power so that sum(rho_k) <= P_Tx_max
+        rho_k_from_a = a[:, :self.K].detach()
+        sum_rho_k = torch.sum(rho_k_from_a, dim=0)
+        normalized_rho_k = rho_k_from_a * (self.power_t / sum_rho_k)
+        #rho_k_from_a_2 = a[:, :self.K]
+        #print("--------------- sum_rho_k shape is ",  sum_rho_k.shape)
+        #print("---------------rho_k_from_a")
+        #print(rho_k_from_a) 
+        #print("---------------normalized_rho_k")
+        #print(normalized_rho_k) 
 
-        real_normal = real_normal.expand(-1, self.N)
-        imag_normal = imag_normal.expand(-1, self.N)
-
-        division_term = torch.cat([current_power_t, real_normal, imag_normal], dim=1)
-
+        #division_term = torch.cat([current_power_t, normalized_rho_k], dim=1)
+        #division_term = torch.cat([normalized_rho_k, a_km_from_a], dim=1)
+        theta_kmn_real = a[:, self.K:self.K+self.K*self.M*self.N].detach()
+        theta_kmn_imag = a[:, self.K*self.M*self.N:2*self.K*self.M*self.N].detach()
+        #print(normalized_rho_k.shape) 
+        #print(theta_kmn_real.shape) 
+        #print(theta_kmn_imag.shape) 
+        division_term = torch.cat([normalized_rho_k, theta_kmn_real, theta_kmn_imag], dim=1)
+        #print(division_term .shape)
+        #input("NaN - Press Enter to continue...")
+        #return a
+        #nan_indices = np.isnan(a.detach())
+        #if nan_indices.any():
+        #    print("Inside FW:", a)
         return self.max_action * a / division_term
 
 
@@ -94,6 +114,22 @@ class Critic(nn.Module):
         q = self.l3(q)
 
         return q
+
+        # Pass through the first linear layer
+        #q = self.l1(state.float())
+        #q = self.bn1(q)
+        #q = torch.relu(q)  # Apply ReLU activation
+        
+        # Concatenate the ReLU output with the action
+        #q = torch.cat([q, action], 1)
+        
+        # Pass through the second linear layer
+        #q = self.l2(q)
+        #q = torch.relu(q)  # Apply ReLU activation
+        
+        # Pass through the output layer (no activation function)
+        #q = self.l3(q)
+        #return q
 
 
 class DDPG(object):
@@ -122,6 +158,8 @@ class DDPG(object):
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         action = self.actor(state).cpu().data.numpy().flatten().reshape(1, -1)
 
+        #print("ACTION in select action:", action)
+        #print("ACTION SHAPE in select action:", action.shape)
         return action
 
     def update_parameters(self, replay_buffer, batch_size=16):
@@ -139,7 +177,7 @@ class DDPG(object):
 
         # Compute the critic loss
         critic_loss = F.mse_loss(current_Q, target_Q)
-
+        
         # Optimize the critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
@@ -152,6 +190,18 @@ class DDPG(object):
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
+
+        # Monitor gradient norms for actor and critic ---edatsika
+        for name, param in self.actor.named_parameters():
+            if param.grad is not None:
+                gradient_norm = param.grad.norm().item()
+               #print(f"Actor Layer: {name}, Gradient Norm: {gradient_norm}")
+
+        for name, param in self.critic.named_parameters():
+            if param.grad is not None:
+                gradient_norm = param.grad.norm().item()
+                #print(f"Critic Layer: {name}, Gradient Norm: {gradient_norm}")
+
 
         # Soft update the target networks
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
