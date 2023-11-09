@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+#%matplotlib inline for google colab
 
 import DDPG
 import utils
@@ -37,7 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_RIS_elements", default=4, type=int, metavar='N', help='Number of RIS elements')
     parser.add_argument("--num_users", default=4, type=int, metavar='N', help='Number of users')
     parser.add_argument("--power_t", default=5, type=float, metavar='N', help='Transmission power for the constrained optimization in dB (default: 30)')
-    parser.add_argument("--num_time_steps_per_eps", default=5000, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
+    parser.add_argument("--num_time_steps_per_eps", default=100, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
     parser.add_argument("--num_eps", default=10, type=int, metavar='N', help='Maximum number of episodes (default: 5000)')
     parser.add_argument("--awgn_var", default=1e-2, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 0.01)')
     parser.add_argument("--channel_est_error", default=False, type=bool, help='Noisy channel estimate? (default: False)')
@@ -100,6 +101,7 @@ if __name__ == "__main__":
         agent.load(f"./models/{policy_file}")
 
     replay_buffer = utils.ExperienceReplayBuffer(state_dim, action_dim, max_size=args.buffer_size)
+    #replay_buffer = ReplayBuffer(max_size=args.buffer_size)
 
     # Initialize the instant rewards recording array
     instant_rewards = []
@@ -107,7 +109,7 @@ if __name__ == "__main__":
     max_reward = 0
 
     # Define the interval for saving aggregated statistics ---edatsika
-    save_interval = 2
+    save_interval = 1
     rho_k_log = []
     theta_kmn_log = []
     sum_rate_log = []
@@ -183,7 +185,7 @@ if __name__ == "__main__":
             episode_time_steps += 1
 
             #edatsika
-            cumulative_reward += max_reward
+            #cumulative_reward += max_reward
 
             if done:
                 #print(f"\nTotal T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_time_steps} Max. Reward: {max_reward:.3f}\n")
@@ -199,7 +201,7 @@ if __name__ == "__main__":
                 instant_rewards.append(eps_rewards)
 
                 # commented by edatsika
-                #np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", instant_rewards)
+                np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", instant_rewards)
         
         cumulative_rewards.append(episode_reward)
     
@@ -208,9 +210,8 @@ if __name__ == "__main__":
         sum_rate_log.append(episode_sum_rate)
         print(f"\nTotal T: {t} Episode Num: {eps} Max. Reward: {max_reward:.3f}\n")
         
-        # Append the cumulative reward to the list of episode rewards
-        episode_rewards.append(cumulative_reward)
         # Save aggregated statistics every N episodes
+        """episode_rewards.append(cumulative_reward)
         if (episode_num + 1) % save_interval == 0:
             mean_reward = np.mean(episode_rewards[-save_interval:])  # Calculate mean of last N episodes
             std_reward = np.std(episode_rewards[-save_interval:])    # Calculate standard deviation
@@ -224,46 +225,51 @@ if __name__ == "__main__":
                 np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", aggregated_stats)
             except Exception as e:
                 # Print the exception or handle it as needed
-                print(f"Error saving results: {e}")
+                print(f"Error saving results: {e}")"""
     
     #edatsika
     # After training, identify the episode with the maximum sum_rate
-    max_sum_rate_episode = np.argmax(sum_rate_log)
+    max_sum_rate_episode = np.argmax(sum_rate_log) #------------------- print optimal values
 
     # Extract the corresponding values of rho_k and theta_kmn
     max_rho_k = rho_k_log[max_sum_rate_episode]
     max_theta_kmn = theta_kmn_log[max_sum_rate_episode]
 
     # Print or use the values as needed
-    print(f"Max Sum Rate: {sum_rate_log[max_sum_rate_episode]}")
-    print(f"Optimal rho_k: {max_rho_k}")
+    #print(f"Max Sum Rate: {sum_rate_log[max_sum_rate_episode]}")
+    #print(f"Optimal rho_k: {max_rho_k}")
     #print(f"Optimal theta_kmn: {max_theta_kmn}")
 
-    file_path = f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}.npy"
+    #file_path = f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}.npy"
     #loaded_data = np.load(file_path, allow_pickle=True) put back causes error
     #print(loaded_data)
     
     # edatsika
     # Convert the rewards list to a NumPy array for further analysis or plotting
-    rewards_array = np.array(instant_rewards)
+    #rewards_array = np.array(instant_rewards)
     #print("Rewards array:", rewards_array.shape)
-    print("Rewards array:", cumulative_rewards)
+    #print("Rewards array:", cumulative_rewards)
 
     # Create x-axis values for all steps and episodes
-    #x_values = np.arange(episode_num * episode_time_steps)
     # Flatten rewards_array
-    flat_rewards = rewards_array.flatten()
+    #flat_rewards = rewards_array.flatten()
     # Plot the rewards for all steps and episodes
-    x_values = np.arange(flat_rewards.shape[0])
-    plt.plot(x_values, flat_rewards)
-
-    plt.xlabel("Step and Episode")
-    plt.ylabel("Reward")
-    plt.title("Reward for All Steps and Episodes")
-    plt.show()
+    #x_values = np.arange(flat_rewards.shape[0])
+    #plt.plot(x_values, flat_rewards)
+    #plt.xlabel("Step and Episode")
+    #plt.ylabel("Reward")
+    #plt.title("Reward for All Steps and Episodes")
+    #plt.show()
 
     # Plot cumulative reward over episodes
-    plt.plot(range(int(args.num_eps)), cumulative_rewards)
+    #plt.plot(range(int(args.num_eps)), instant_rewards)#cumulative_rewards
+    avg_reward = np.zeros_like(instant_rewards)
+
+    for i in range(len(instant_rewards)):
+        avg_reward[i] = np.sum(instant_rewards[:(i + 1)]) / (i + 1)
+    #plt.plot(range(len(instant_rewards)), instant_rewards)
+    plt.plot(range(len(avg_reward)), avg_reward)
+    #plt.plot(range(len(cumulative_rewards)), cumulative_rewards)#cumulative_rewards
     plt.xlabel("Episode")
     plt.ylabel("Cumulative Reward")
     plt.title("Cumulative Reward over Episodes")

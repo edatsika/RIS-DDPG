@@ -15,6 +15,7 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         hidden_dim = 1 if state_dim == 0 else 2 ** (state_dim - 1).bit_length()
         #hidden_dim = state_dim
+        #print("action_dim:", action_dim)
         #print("state_dim:", state_dim)
         #print("hidden_dim:", hidden_dim)
 
@@ -26,13 +27,10 @@ class Actor(nn.Module):
         self.power_t = power_t
 
         self.l1 = nn.Linear(state_dim, hidden_dim)
-        self.l2 = nn.Linear(hidden_dim, hidden_dim)
-        self.l3 = nn.Linear(hidden_dim, action_dim)
-
-        self.bn1 = nn.BatchNorm1d(hidden_dim)
-        self.bn2 = nn.BatchNorm1d(hidden_dim)
+        self.l2 = nn.Linear(hidden_dim, action_dim)
 
         self.max_action = max_action
+        self.hidden_dim = hidden_dim
 
 
     def forward(self, state):          
@@ -52,20 +50,9 @@ class Actor(nn.Module):
             print("Inside FW after l1 (state before l1):", state.float())
             print("Inside FW after l1:", a)
             input("Press Enter to continue...")
-        # Apply batch normalization to the each hidden layer's input
-        a = self.bn1(a)
 
-        a = torch.tanh(self.l2(a))
-        #a = F.sigmoid(self.l2(a)) 
-        #print("a shape in FW:", a.shape)
 
-        a = self.bn2(a)
-        a = torch.tanh(self.l3(a))
-        #a = F.sigmoid(self.l3(a))
-        #print("a shape in FW:", a.shape)
-
-        #action is: self.rho_k, self.a_km.reshape(-1), theta_kmn_real, theta_kmn_imag)
-
+        #------------REMOVE THIS???
         # Normalize power so that sum(rho_k) <= P_Tx_max
         rho_k_from_a = a[:, :self.K].detach()
         sum_rho_k = torch.sum(rho_k_from_a, dim=0)
@@ -91,7 +78,8 @@ class Actor(nn.Module):
         #nan_indices = np.isnan(a.detach())
         #if nan_indices.any():
         #    print("Inside FW:", a)
-        return self.max_action * a / division_term
+        #return self.max_action * a / division_term
+        return torch.sigmoid(self.l2(a))
 
 
 class Critic(nn.Module):
@@ -100,36 +88,15 @@ class Critic(nn.Module):
         hidden_dim = 1 if (state_dim + action_dim) == 0 else 2 ** ((state_dim + action_dim) - 1).bit_length()
 
         self.l1 = nn.Linear(state_dim, hidden_dim)
-        self.l2 = nn.Linear(hidden_dim + action_dim, hidden_dim)
-        self.l3 = nn.Linear(hidden_dim, 1)
-
-        self.bn1 = nn.BatchNorm1d(hidden_dim)
+        self.l2 = nn.Linear(hidden_dim + action_dim, 1)
 
     def forward(self, state, action):
         q = torch.tanh(self.l1(state.float()))
 
-        q = self.bn1(q)
-        q = torch.tanh(self.l2(torch.cat([q, action], 1)))
+        q = self.l2(torch.cat([q, action], 1))
 
-        q = self.l3(q)
-
+        #Pass through the output layer (no activation function)
         return q
-
-        # Pass through the first linear layer
-        #q = self.l1(state.float())
-        #q = self.bn1(q)
-        #q = torch.relu(q)  # Apply ReLU activation
-        
-        # Concatenate the ReLU output with the action
-        #q = torch.cat([q, action], 1)
-        
-        # Pass through the second linear layer
-        #q = self.l2(q)
-        #q = torch.relu(q)  # Apply ReLU activation
-        
-        # Pass through the output layer (no activation function)
-        #q = self.l3(q)
-        #return q
 
 
 class DDPG(object):
@@ -138,21 +105,24 @@ class DDPG(object):
 
         powert_t_W = 10 ** (power_t / 10)
 
-        # Initialize actor networks and optimizer
+        #self.actor = Actor(state_dim, action_dim, max_action).to(device)
         self.actor = Actor(state_dim, action_dim, M, N, K, powert_t_W, max_action=max_action, device=device).to(self.device)
+        #self.actor_target = Actor(state_dim, action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr, weight_decay=actor_decay)
-
-        # Initialize critic networks and optimizer
-        self.critic = Critic(state_dim, action_dim).to(self.device)
+        
+        self.critic = Critic(state_dim, action_dim).to(device)
+        #self.critic_target = Critic(state_dim, action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr, weight_decay=critic_decay)
 
-        # Initialize the discount and target update rated
+                # Initialize the discount and target update rated
         self.discount = discount
         self.tau = tau
 
     def select_action(self, state):
+        #state = torch.FloatTensor(state).to(self.device)
+        #return self.actor(state).cpu().data.numpy()
         self.actor.eval()
 
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
@@ -162,12 +132,31 @@ class DDPG(object):
         #print("ACTION SHAPE in select action:", action.shape)
         return action
 
+    def soft_update(self):
+
+        # Monitor gradient norms for actor and critic ---edatsika
+        for name, param in self.actor.named_parameters():
+            if param.grad is not None:
+                gradient_norm = param.grad.norm().item()
+               #print(f"Actor Layer: {name}, Gradient Norm: {gradient_norm}")
+
+        for name, param in self.critic.named_parameters():
+            if param.grad is not None:
+                gradient_norm = param.grad.norm().item()
+                #print(f"Critic Layer: {name}, Gradient Norm: {gradient_norm}")
+
+        # Soft update the target networks
+        for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
+            target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
+        for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
+            target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
+
     def update_parameters(self, replay_buffer, batch_size=16):
         self.actor.train()
 
         # Sample from the experience replay buffer
         state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
-
+        
         # Compute the target Q-value
         target_Q = self.critic_target(next_state, self.actor_target(next_state))
         target_Q = reward + (not_done * self.discount * target_Q).detach()
@@ -190,27 +179,11 @@ class DDPG(object):
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
-
-        # Monitor gradient norms for actor and critic ---edatsika
-        for name, param in self.actor.named_parameters():
-            if param.grad is not None:
-                gradient_norm = param.grad.norm().item()
-               #print(f"Actor Layer: {name}, Gradient Norm: {gradient_norm}")
-
-        for name, param in self.critic.named_parameters():
-            if param.grad is not None:
-                gradient_norm = param.grad.norm().item()
-                #print(f"Critic Layer: {name}, Gradient Norm: {gradient_norm}")
-
-
+        
         # Soft update the target networks
-        for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
-            target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+        self.soft_update()
 
-        for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
-            target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-
-    # Save the model parameters
+ # Save the model parameters
     def save(self, file_name):
         torch.save(self.critic.state_dict(), file_name + "_critic")
         torch.save(self.critic_optimizer.state_dict(), file_name + "_critic_optimizer")
@@ -227,3 +200,5 @@ class DDPG(object):
         self.actor.load_state_dict(torch.load(file_name + "_actor"))
         self.actor_optimizer.load_state_dict(torch.load(file_name + "_actor_optimizer"))
         self.actor_target = copy.deepcopy(self.actor)
+
+        

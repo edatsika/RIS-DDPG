@@ -34,7 +34,7 @@ class RIS_MISO(object):
         a_size = self.K*self.M #assume complex but actually binary
         theta_size = 2*self.K*self.M*self.N
 
-        self.state_dim = rho_size + h_size + g_size + a_size + theta_size #??? edw einai epi 2 alla stous pinakes einai to complex ena stoixeio
+        self.state_dim = rho_size + h_size + g_size + a_size + theta_size # inside arrays complex number =  1 element
         #print("state_dim in env:", self.state_dim)
 
         self.action_dim = rho_size + theta_size
@@ -127,9 +127,12 @@ class RIS_MISO(object):
 
         return self.state
 
-    def _compute_reward(self):
+    def _compute_reward(self, Pmax):
         reward = 0
         opt_reward = 0
+        # Rate constraint for K users
+        r_k_min = np.full((self.K, self.M), 0.1) # 2 bps/Hz
+        powert_t_W = 10 ** (Pmax / 10)#10 ** (self.power_t / 10)
 
         sigma = 1.0  # Example noise variance
         #print("rho_k_values inside step inside compute reward:", self.rho_k)
@@ -156,12 +159,33 @@ class RIS_MISO(object):
                 #print("h_km_values:", h_km_values)
                 #print("g_km_values:", g_km_values)
         #print("a_km_values inside compute_reward:", self.a_km)
+        
         # Calculate the sum rate
         sum_rate = np.sum(np.log2(1 + snr_km))
-        reward = sum_rate
+        #reward = sum_rate
         #print("Current reward:", reward)
-        opt_reward = reward # example comparison: optimal reward would be without interference
+        #print("np.sum(rho_k_values):", np.sum(rho_k_values))
 
+        # Reward with penalty
+        # Check if each user's data rate meets the minimum rate requirement
+        sum_rate_k =np.log2(1 + snr_km)
+        positive_elements = sum_rate_k[sum_rate_k > 0]
+        rate_meets_requirement = (sum_rate[sum_rate > 0] >= r_k_min[sum_rate > 0]).all()
+        #print("sum_rate_k:", sum_rate_k)
+        #print("sum_rate:", sum_rate)
+        #print("r_k_min:", r_k_min)
+        #print("rate_meets_requirement):", rate_meets_requirement)     
+        if rate_meets_requirement and np.sum(rho_k_values) <= powert_t_W:
+        #if rate_meets_requirement:
+            reward = sum_rate  # Positive reward for achieving the goal
+        else:
+            reward = -1.0  # Negative reward for not meeting the requirements
+
+        # Calculate the reward while considering rate constraints
+        #reward = sum_rate - np.sum(np.maximum(0, r_k_min - sum_rate))
+        #print("Current reward:", reward)
+
+        opt_reward = reward # example comparison: optimal reward would be without interference
         return reward, opt_reward
 
     def step(self, action):
@@ -169,7 +193,7 @@ class RIS_MISO(object):
 
         # Separate the action into different components
         rho_k = action[0,:self.K].copy()  # Extract and make a copy of transmission power values
-        Pmax = 5
+        Pmax = 5    
         #print("----------------")
         while np.sum(rho_k) > Pmax or (rho_k < 0).any():
             rho_k = np.random.uniform(0.1, Pmax, size=(self.K,))
@@ -213,7 +237,7 @@ class RIS_MISO(object):
 
         #print(f"############ Inside env.step: State shape {self.state.shape}, State: {self.state[:, :self.K]}")
 
-        #Update env arrays for rho, a_km, theta, h, g ?????????????????????
+        #Update env arrays for rho, a_km, theta, h, g ??
         self.rho_k = np.array(action[:, :self.K])
         #self.a_km=a_km
         #self.a_km = action[:, self.K:self.K + a_km_size]
@@ -227,7 +251,7 @@ class RIS_MISO(object):
         #print(self.theta_kmn)
         #input("Check shapes - Press Enter to continue...")
         
-        reward, opt_reward = self._compute_reward()
+        reward, opt_reward = self._compute_reward(Pmax)
 
         done = opt_reward == reward
 
