@@ -1,11 +1,10 @@
-%matplotlib inline #for google colab
-
 import argparse
 import os
 
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+%matplotlib inline #for google colab
 
 import DDPG
 import utils
