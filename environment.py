@@ -7,9 +7,10 @@ class RIS_DDPG(object):
                  num_RIS_elements,
                  num_users,
                  power_t,
+                 AWGN_var,
+                 bandwidth,
                  channel_est_error=False,
-                 AWGN_var=1e-2,
-                 channel_noise_var=1e-2
+                 channel_noise_var=1e-2,
                  ):
 
         self.M = num_RIS
@@ -21,8 +22,11 @@ class RIS_DDPG(object):
         self.awgn_var = AWGN_var
         self.channel_noise_var = channel_noise_var
 
-        powert_t_W = 10 ** (power_t / 10)
-        #print("powert_t_W:", powert_t_W)
+        self.bandwidth = bandwidth
+
+        power_t_W = 10 ** (power_t / 10) * 1e-3
+        #print("power_t:", power_t)
+        #print("power_t_W:", power_t_W)
 
         # Define the variables
         self.h_km = np.random.rand(self.K, self.M, self.N)  # Example channel matrix
@@ -76,8 +80,8 @@ class RIS_DDPG(object):
         #self.rho_k = np.zeros(self.K, dtype=float)
 
         #self.rho_k = np.random.uniform(0, powert_t_W, size=(self.K,))
-        self.rho_k_min = 0.1  # Minimum allowable transmission power (adjust as needed)
-        self.rho_k = np.random.uniform(self.rho_k_min, powert_t_W, size=(self.K,))
+        self.rho_k_min = 0.0001  # Minimum allowable transmission power (adjust as needed)
+        self.rho_k = np.random.uniform(self.rho_k_min, power_t_W, size=(self.K,))
 
         #print("Dimensions of self.a_km:", self.a_km.shape)
         #print("Dimensions of self.rho_k:", self.rho_k.shape)
@@ -125,7 +129,7 @@ class RIS_DDPG(object):
         #print(g_kmn_real.shape)
         #print(g_kmn_imag.shape)
 
-        sigma = 1.0  # Example noise variance
+        sigma = self.awgn_var  # Example noise variance
         #print("rho_k_values inside step inside compute reward:", self.rho_k)
         #print("Shape of self.rho_k:", self.rho_k.shape)
         #print("Shape of self.theta_kmn:", self.theta_kmn.shape)
@@ -153,7 +157,8 @@ class RIS_DDPG(object):
                 decoded_a_km_values = a_km_values
                 #decoded_a_km_values = (a_km_values + 1) / 2
                 #print(k)
-                snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma ** 2)
+                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma ** 2)
+                snr_km[k, m] = decoded_a_km_values * (rho_k_values[k]*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma ** 2)
 
         
         #self.state = np.hstack((init_action, self.a_km.reshape(1,-1), h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))
@@ -167,10 +172,10 @@ class RIS_DDPG(object):
         reward = 0
         opt_reward = 0
         # Rate constraint for K users
-        r_k_min = np.full((self.K, self.M), 5) # 5 bps/Hz
-        #powert_t_W = 10 ** (Pmax / 10)#10 ** (self.power_t / 10)
+        r_k_min = np.full((self.K, self.M), 5*self.bandwidth) # 5 bps/Hz*bandwidth
+        powert_t_W = 10 ** (Pmax / 10) * 1e-3 #10 ** (self.power_t / 10) 10 ** (dbm / 10) * 1e-3
 
-        sigma = 1.0  # Example noise variance
+        sigma = self.awgn_var  # Example noise variance
         #print("rho_k_values inside step inside compute reward:", self.rho_k)
         #print("Shape of self.rho_k:", self.rho_k.shape)
         #print("Shape of self.theta_kmn:", self.theta_kmn.shape)
@@ -187,7 +192,10 @@ class RIS_DDPG(object):
                 # Calculate the SNR for user k and RIS element m (considering all N elements)
                 decoded_a_km_values = a_km_values
                 #decoded_a_km_values = (a_km_values + 1) / 2
-                snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values) ** 2 / sigma ** 2)
+                snr_km[k, m] = decoded_a_km_values * (rho_k_values*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma ** 2)
+                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values) ** 2 / sigma ** 2)
+                #print("snr_km[k, m]:", snr_km[k, m])
+                #print("snr_km[k, m]:", snr_km[k, m])
                 #print("rho_k_values:", rho_k_values)
                 #print("a_km_values:", a_km_values)
                 #print("decoded_a_km_values:", decoded_a_km_values)
@@ -197,23 +205,26 @@ class RIS_DDPG(object):
         #print("a_km_values inside compute_reward:", self.a_km)
         
         # Calculate the sum rate
-        sum_rate = np.sum(np.log2(1 + snr_km))
+        sum_rate = self.bandwidth*np.sum(np.log2(1 + snr_km))
+        #print("Sum_rate:", sum_rate)
         #reward = sum_rate
         #print("Current reward:", reward)
         #print("np.sum(rho_k_values):", np.sum(rho_k_values))
 
         # Reward with penalty
         # Check if each user's data rate meets the minimum rate requirement
-        sum_rate_k =np.log2(1 + snr_km)
-        positive_elements = sum_rate_k[sum_rate_k > 0]
+        #sum_rate_k =self.bandwidth*np.log2(1 + snr_km)
+        #positive_elements = sum_rate_k[sum_rate_k > 0]
         rate_meets_requirement = (sum_rate[sum_rate > 0] >= r_k_min[sum_rate > 0]).all()
-        #print("sum_rate_k:", sum_rate_k)
-        #print("sum_rate:", sum_rate)
+        power_meets_requirement = (rho_k_values[rho_k_values > 0] <= powert_t_W).all()
+        #print("sum_rate_k:", sum_rate_k/1000000)
+        #print("sum_rate:", sum_rate/1000000)
         #print("r_k_min:", r_k_min)
         #print("rate_meets_requirement):", rate_meets_requirement)     
-        if rate_meets_requirement and np.sum(rho_k_values) <= powert_t_W:
-        #if rate_meets_requirement:
-            reward = sum_rate  # Positive reward for achieving the goal
+        #if rate_meets_requirement and np.sum(rho_k_values) <= powert_t_W:
+        if rate_meets_requirement and power_meets_requirement:
+            reward = sum_rate/1000000  # Positive reward for achieving the goal
+            #print("sum_rate:", sum_rate/1000000)
         else:
             reward = -1.0  # Negative reward for not meeting the requirements
 
@@ -224,19 +235,19 @@ class RIS_DDPG(object):
         opt_reward = reward # example comparison: optimal reward would be without interference
         return reward, opt_reward
 
-    def step(self, action):
+    def step(self, action, power_t):
         self.episode_t += 1
 
         # Separate the action into different components
         rho_k = action[0,:self.K].copy()  # Extract and make a copy of transmission power values
-        Pmax = -20  
+        Pmax = 10 ** (power_t / 10) * 1e-3
         #print("----------------")
         while np.sum(rho_k) > Pmax or (rho_k < 0).any():
-            rho_k = np.random.uniform(0.1, Pmax, size=(self.K,))
+            rho_k = np.random.uniform(1e-4, Pmax, size=(self.K,))
         #while np.sum(rho_k) > Pmax:
         # If the sum exceeds Pmax, resample rho_k
         #     rho_k = np.random.uniform(0.1, Pmax, size=(self.K,))
-        #print(rho_k)
+       # print(rho_k)
 
         # Update the transmission power values in the action array ?????????????????????????
         action[0, :self.K] = rho_k.reshape(1, self.K)
@@ -269,7 +280,7 @@ class RIS_DDPG(object):
         g_kmn_real = np.real(self.g_km).reshape(1,-1)
         g_kmn_imag = np.imag(self.g_km).reshape(1,-1)
 
-        sigma = 1.0  # Example noise variance
+        sigma = self.awgn_var  # Example noise variance
         #print("rho_k_values inside step inside compute reward:", self.rho_k)
         #print("Shape of self.rho_k:", self.rho_k.shape)
         #print("Shape of self.theta_kmn:", self.theta_kmn.shape)
@@ -289,7 +300,8 @@ class RIS_DDPG(object):
                 # Calculate the SNR for user k and RIS element m (considering all N elements)
                 decoded_a_km_values = a_km_values
                 #decoded_a_km_values = (a_km_values + 1) / 2
-                snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma ** 2)
+                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma ** 2)
+                snr_km[k, m] = decoded_a_km_values * (rho_k_values[k]*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma ** 2)
 
 
         self.state = np.hstack((snr_km.reshape(1,-1), a_km, h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))

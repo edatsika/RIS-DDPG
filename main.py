@@ -35,13 +35,14 @@ if __name__ == "__main__":
 
     # Environment-specific parameters
     parser.add_argument("--num_RIS", default=2, type=int, metavar='N', help='Number of antennas in the BS')
-    parser.add_argument("--num_RIS_elements", default=2, type=int, metavar='N', help='Number of RIS elements')
+    parser.add_argument("--num_RIS_elements", default=10, type=int, metavar='N', help='Number of RIS elements')
     parser.add_argument("--num_users", default=2, type=int, metavar='N', help='Number of users')
-    parser.add_argument("--power_t", default=-20, type=float, metavar='N', help='Transmission power for the constrained optimization in dB (default: 30)')
-    parser.add_argument("--num_time_steps_per_eps", default=2000, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
+    parser.add_argument("--power_t", default=0, type=float, metavar='N', help='Transmission power for the constrained optimization in dBm (default: 30)')
+    parser.add_argument("--num_time_steps_per_eps", default=500, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
     parser.add_argument("--num_eps", default=10, type=int, metavar='N', help='Maximum number of episodes (default: 5000)')
-    parser.add_argument("--awgn_var", default=1e-2, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 0.01)')
+    parser.add_argument("--awgn_var", default=1e-2, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 1e-2)')
     parser.add_argument("--channel_est_error", default=False, type=bool, help='Noisy channel estimate? (default: False)')
+    parser.add_argument("--bandwidth", default=2*1000000, type=float, help='Channel bandwidth (default: 5 MHz)')
 
     # Algorithm-specific parameters
     parser.add_argument("--exploration_noise", default=0.0, metavar='G', help='Std of Gaussian exploration noise')
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     if args.save_model and not os.path.exists("./Models"):
         os.makedirs("./Models")
 
-    env = environment.RIS_DDPG(args.num_RIS, args.num_RIS_elements, args.num_users, args.power_t, AWGN_var=args.awgn_var)
+    env = environment.RIS_DDPG(args.num_RIS, args.num_RIS_elements, args.num_users, args.power_t, AWGN_var=args.awgn_var, bandwidth=args.bandwidth)
 
     # Set seeds
     torch.manual_seed(args.seed)
@@ -84,6 +85,7 @@ if __name__ == "__main__":
         "M": args.num_RIS,
         "N": args.num_RIS_elements,
         "K": args.num_users,
+        "bandwidth": args.bandwidth,
         "actor_lr": args.lr,
         "critic_lr": args.lr,
         "actor_decay": args.decay,
@@ -140,7 +142,7 @@ if __name__ == "__main__":
             #if np.any(state[:env.K] < 0):
             #    input("Press Enter to continue...")
             # Take the selected action
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _ = env.step(action, args.power_t)
             #print(f">>>>>>>>>>>>>>>>>>>>>> Episode {eps}, Step {t}, Action shape {action.shape}, Action after env.step in main: {action}")
             #print(f">>>>>>>>>>>>>>>>>>>>>> State shape {state.shape}, State after env.step in main: {state[:env.K]}")
             #print("rho_k values after step:", env.rho_k)
@@ -206,7 +208,7 @@ if __name__ == "__main__":
         rho_k_log.append(episode_rho_k_log)
         theta_kmn_log.append(episode_theta_kmn_log)
         sum_rate_log.append(episode_sum_rate)
-        print(f"\nTotal T steps completed: {t} Episode Num: {eps} Max. Reward: {max_reward:.3f}\n")
+        print(f"\nTotal T steps completed: {t} Episode Num: {eps} Max. Reward: {max_reward:.6f}\n")
         
         # Save aggregated statistics every N episodes
         """episode_rewards.append(cumulative_reward)

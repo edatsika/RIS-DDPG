@@ -100,7 +100,7 @@ class Critic(nn.Module):
 
 
 class DDPG(object):
-    def __init__(self, state_dim, action_dim, M, N, K, power_t, max_action, actor_lr, critic_lr, actor_decay, critic_decay, device, discount=0.99, tau=0.001):
+    def __init__(self, state_dim, action_dim, M, N, K, power_t, bandwidth, max_action, actor_lr, critic_lr, actor_decay, critic_decay, device, discount=0.99, tau=0.001):
         self.device = device
 
         powert_t_W = 10 ** (power_t / 10)

@@ -2,14 +2,13 @@
 
 This is a modified version of the PyTorch implementation of the paper [*Reconfigurable Intelligent Surface Assisted Multiuser MISO Systems Exploiting Deep Reinforcement Learning*](https://ieeexplore.ieee.org/document/9110869). The paper solves a Reconfigurable Intelligent Surface (RIS) Assisted Multiuser Multi-Input Single-Output (MISO) System problem with the deep reinforcement learning algorithm of [DDPG](https://arxiv.org/abs/1509.02971) for sixth generation (6G) applications.
 
-The algorithm is tested, and the results are reproduced on a custom RIS assisted Multiuser environment.
+The algorithm is tested, and the results are reproduced on a custom RIS-assisted multiuser environment.
 
 ## Description
 This version solves the sum rate maximization problem in a multiple RIS-assisted wireless network. It allocates the transmission power of multiple users in uplink scenario and configures the phase shifts of multiple RISs, considering maximum acceptable transmission power constraint and minimum acceptable data rate (per user) constraint. Two-layer neural networks are used for both actor and critic. The files that have been modified are *main.py*, *environment.py* and *DDPG.py*. 
 
 ### Results
-
-Reproduced figures are found under *./Learning Figures* respective to the figure number in the paper. Reproduced learning and evaluation curves are found under *./Learning Curves*. The hyper-parameter setting follows the one presented in the paper except for the variance of AWGN, scale of the Rayleigh distribution and number of hidden units in the networks. These values are tuned to match the original results. 
+The hyper-parameter setting follows the one presented in the paper except for the variance of AWGN, scale of the Rayleigh distribution and number of hidden units in the networks. These values are tuned to match the original results. 
 
 ### Run
 **0. Requirements**
@@ -30,20 +29,8 @@ Reproduced figures are found under *./Learning Figures* respective to the figure
     ```bash
     pip install -r requirements.txt
     ```
-    
-**2. Reproduce the results provided in the paper (to be removed)**
-   * Usage:
-   ```
-    usage: reproduce.py [-h] [--figure_num {4,5,6,7,8,9,10,11,12}]
-  ```
-  * Optional Arguments:
-  ```
-    optional arguments:
-    -h, --help            show this help message and exit
-    --figure_num {4,5,6,7,8,9,10,11,12} Choose one of figures from the paper to reproduce
-   ```
    
-**3. Train the model from scratch**
+**2. Train the model from scratch**
   * Usage:
    ```
    usage: main.py [-h]
