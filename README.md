@@ -8,7 +8,7 @@ The algorithm is tested, and the results are reproduced on a custom RIS-assisted
 This version solves the sum rate maximization problem in a multiple RIS-assisted wireless network. It allocates the transmission power of multiple users in uplink scenario and configures the phase shifts of multiple RISs, considering maximum acceptable transmission power constraint and minimum acceptable data rate (per user) constraint. Two-layer neural networks are used for both actor and critic. The files that have been modified are *main.py*, *environment.py* and *DDPG.py*. 
 
 ### Results
-The hyper-parameter setting follows the one presented in the paper except for the variance of AWGN, scale of the Rayleigh distribution and number of hidden units in the networks. These values are tuned to match the original results. 
+The algorithm is currently under testing. 
 
 ### Run
 **0. Requirements**
