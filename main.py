@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     # Training-specific parameters
     parser.add_argument("--policy", default="DDPG", help='Algorithm (default: DDPG)')
-    parser.add_argument("--env", default="RIS_MISO", help='OpenAI Gym environment name')
+    parser.add_argument("--env", default="RIS_DDPG", help='OpenAI Gym environment name')
     parser.add_argument("--seed", default=0, type=int, help='Seed number for PyTorch and NumPy (default: 0)')
     parser.add_argument("--gpu", default="0", type=int, help='GPU ordinal for multi-GPU computers (default: 0)')
     parser.add_argument("--start_time_steps", default=0, type=int, metavar='N', help='Number of exploration time steps sampling random actions (default: 0)')
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     if args.save_model and not os.path.exists("./Models"):
         os.makedirs("./Models")
 
-    env = environment.RIS_MISO(args.num_RIS, args.num_RIS_elements, args.num_users, args.power_t, AWGN_var=args.awgn_var)
+    env = environment.RIS_DDPG(args.num_RIS, args.num_RIS_elements, args.num_users, args.power_t, AWGN_var=args.awgn_var)
 
     # Set seeds
     torch.manual_seed(args.seed)

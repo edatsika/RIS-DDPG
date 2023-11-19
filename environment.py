@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class RIS_MISO(object):
+class RIS_DDPG(object):
     def __init__(self,
                  num_RIS,
                  num_RIS_elements,

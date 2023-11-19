@@ -31,7 +31,7 @@ Reproduced figures are found under *./Learning Figures* respective to the figure
     pip install -r requirements.txt
     ```
     
-**2. Reproduce the results provided in the paper**
+**2. Reproduce the results provided in the paper (to be removed)**
    * Usage:
    ```
     usage: reproduce.py [-h] [--figure_num {4,5,6,7,8,9,10,11,12}]
