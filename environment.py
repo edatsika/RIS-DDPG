@@ -34,7 +34,9 @@ class RIS_MISO(object):
         a_size = self.K*self.M #assume complex but actually binary
         theta_size = 2*self.K*self.M*self.N
 
-        self.state_dim = rho_size + h_size + g_size + a_size + theta_size # inside arrays complex number =  1 element
+        #self.state_dim = rho_size + h_size + g_size + a_size + theta_size # inside arrays complex number =  1 element
+
+        self.state_dim = h_size + g_size + 2*a_size
         #print("state_dim in env:", self.state_dim)
 
         self.action_dim = rho_size + theta_size
@@ -122,8 +124,42 @@ class RIS_MISO(object):
         #print(h_kmn_imag.shape)
         #print(g_kmn_real.shape)
         #print(g_kmn_imag.shape)
-        self.state = np.hstack((init_action, self.a_km.reshape(1,-1), h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))
+
+        sigma = 1.0  # Example noise variance
+        #print("rho_k_values inside step inside compute reward:", self.rho_k)
+        #print("Shape of self.rho_k:", self.rho_k.shape)
+        #print("Shape of self.theta_kmn:", self.theta_kmn.shape)
+        # Calculate the SNR for each user and RIS
+        snr_km = np.zeros((self.K, self.M))
+        for k in range(self.K):
+            for m in range(self.M):
+                # Calculate the SNR for user k and RIS m
+                a_km_values = self.a_km[k, m]  # Get the value from the binary matrix a_km
+                #rho_k_values = np.array(self.rho_k)  # Convert to numpy array if not already
+                #rho_k_values = self.rho_k[0,k]    # Get the transmission power for user k
+                rho_k_values = self.rho_k[np.newaxis, :]
+                if np.ndim(rho_k_values) >= 2:
+                # Convert N-D array to 1D array
+                    rho_k_values = np.squeeze(rho_k_values)
+                #print("Shape of rho_k_values:", rho_k_values.shape)
+                #rho_k_values = self.rho_k    # Get the transmission power for user k
+                #print("rho_k_values:", rho_k_values[np.newaxis, :])
+                #print("rho_k_values [k]:", rho_k_values[k])
+                #print("Shape of rho_k_values:", rho_k_values.shape)
+                h_km_values = self.h_km[k, m, :]  # Get the complex channel matrix h for user k and RIS element m (all N elements)
+                g_km_values = self.g_km[k, m, :]  # Get the complex channel matrix g for user k and RIS element m (all N elements)
+
+                # Calculate the SNR for user k and RIS element m (considering all N elements)
+                decoded_a_km_values = a_km_values
+                #decoded_a_km_values = (a_km_values + 1) / 2
+                #print(k)
+                snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma ** 2)
+
+        
+        #self.state = np.hstack((init_action, self.a_km.reshape(1,-1), h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))
+        self.state = np.hstack((snr_km.reshape(1,-1), self.a_km.reshape(1,-1), h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))
         #print(f"???????????????? State in reset of env: {self.state}")
+        #print(f"???????????????? State shape in reset of env: {self.state.shape}")
 
         return self.state
 
@@ -131,8 +167,8 @@ class RIS_MISO(object):
         reward = 0
         opt_reward = 0
         # Rate constraint for K users
-        r_k_min = np.full((self.K, self.M), 0.1) # 2 bps/Hz
-        powert_t_W = 10 ** (Pmax / 10)#10 ** (self.power_t / 10)
+        r_k_min = np.full((self.K, self.M), 5) # 5 bps/Hz
+        #powert_t_W = 10 ** (Pmax / 10)#10 ** (self.power_t / 10)
 
         sigma = 1.0  # Example noise variance
         #print("rho_k_values inside step inside compute reward:", self.rho_k)
@@ -193,7 +229,7 @@ class RIS_MISO(object):
 
         # Separate the action into different components
         rho_k = action[0,:self.K].copy()  # Extract and make a copy of transmission power values
-        Pmax = 5    
+        Pmax = -20  
         #print("----------------")
         while np.sum(rho_k) > Pmax or (rho_k < 0).any():
             rho_k = np.random.uniform(0.1, Pmax, size=(self.K,))
@@ -233,7 +269,30 @@ class RIS_MISO(object):
         g_kmn_real = np.real(self.g_km).reshape(1,-1)
         g_kmn_imag = np.imag(self.g_km).reshape(1,-1)
 
-        self.state = np.hstack((action, a_km, h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))
+        sigma = 1.0  # Example noise variance
+        #print("rho_k_values inside step inside compute reward:", self.rho_k)
+        #print("Shape of self.rho_k:", self.rho_k.shape)
+        #print("Shape of self.theta_kmn:", self.theta_kmn.shape)
+        # Calculate the SNR for each user and RIS
+        snr_km = np.zeros((self.K, self.M))
+        for k in range(self.K):
+            for m in range(self.M):
+                # Calculate the SNR for user k and RIS m
+                a_km_values = self.a_km[k, m]  # Get the value from the binary matrix a_km
+                rho_k_values = self.rho_k    # Get the transmission power for user k
+                if np.ndim(rho_k_values) >= 2:
+                # Convert N-D array to 1D array
+                    rho_k_values = np.squeeze(rho_k_values)
+                h_km_values = self.h_km[k, m, :]  # Get the complex channel matrix h for user k and RIS element m (all N elements)
+                g_km_values = self.g_km[k, m, :]  # Get the complex channel matrix g for user k and RIS element m (all N elements)
+
+                # Calculate the SNR for user k and RIS element m (considering all N elements)
+                decoded_a_km_values = a_km_values
+                #decoded_a_km_values = (a_km_values + 1) / 2
+                snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma ** 2)
+
+
+        self.state = np.hstack((snr_km.reshape(1,-1), a_km, h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))
 
         #print(f"############ Inside env.step: State shape {self.state.shape}, State: {self.state[:, :self.K]}")
 

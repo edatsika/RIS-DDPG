@@ -34,11 +34,11 @@ if __name__ == "__main__":
     parser.add_argument("--load_model", default="", help='Model load file name; if empty, does not load')
 
     # Environment-specific parameters
-    parser.add_argument("--num_RIS", default=4, type=int, metavar='N', help='Number of antennas in the BS')
-    parser.add_argument("--num_RIS_elements", default=4, type=int, metavar='N', help='Number of RIS elements')
-    parser.add_argument("--num_users", default=4, type=int, metavar='N', help='Number of users')
-    parser.add_argument("--power_t", default=5, type=float, metavar='N', help='Transmission power for the constrained optimization in dB (default: 30)')
-    parser.add_argument("--num_time_steps_per_eps", default=5000, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
+    parser.add_argument("--num_RIS", default=2, type=int, metavar='N', help='Number of antennas in the BS')
+    parser.add_argument("--num_RIS_elements", default=2, type=int, metavar='N', help='Number of RIS elements')
+    parser.add_argument("--num_users", default=2, type=int, metavar='N', help='Number of users')
+    parser.add_argument("--power_t", default=-20, type=float, metavar='N', help='Transmission power for the constrained optimization in dB (default: 30)')
+    parser.add_argument("--num_time_steps_per_eps", default=2000, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
     parser.add_argument("--num_eps", default=10, type=int, metavar='N', help='Maximum number of episodes (default: 5000)')
     parser.add_argument("--awgn_var", default=1e-2, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 0.01)')
     parser.add_argument("--channel_est_error", default=False, type=bool, help='Noisy channel estimate? (default: False)')
@@ -121,16 +121,14 @@ if __name__ == "__main__":
         episode_num = 0
         episode_time_steps = 0
 
-        #edatsika
-        episode_rho_k_log = []
-        episode_theta_kmn_log = []
-        episode_sum_rate = 0
-
         state = whiten(state)
 
         eps_rewards = []
 
-        # edatsika
+        #edatsika
+        episode_rho_k_log = []
+        episode_theta_kmn_log = []
+        episode_sum_rate = 0
         episode_rewards = []
         cumulative_reward = 0
 
@@ -192,7 +190,7 @@ if __name__ == "__main__":
                 #print(f"\nEpisode Num: {eps} Episode T: {t} Max. Reward: {max_reward:.3f}\n")
                 # Reset the environment
                 state, done = env.reset(), False
-                #episode_reward = 0
+                episode_reward = 0
                 episode_time_steps = 0
                 episode_num += 1
 
@@ -201,14 +199,14 @@ if __name__ == "__main__":
                 instant_rewards.append(eps_rewards)
 
                 # commented by edatsika
-                np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", instant_rewards)
+                #np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", instant_rewards)
         
         cumulative_rewards.append(episode_reward)
     
         rho_k_log.append(episode_rho_k_log)
         theta_kmn_log.append(episode_theta_kmn_log)
         sum_rate_log.append(episode_sum_rate)
-        print(f"\nTotal T: {t} Episode Num: {eps} Max. Reward: {max_reward:.3f}\n")
+        print(f"\nTotal T steps completed: {t} Episode Num: {eps} Max. Reward: {max_reward:.3f}\n")
         
         # Save aggregated statistics every N episodes
         """episode_rewards.append(cumulative_reward)
@@ -236,8 +234,9 @@ if __name__ == "__main__":
     max_theta_kmn = theta_kmn_log[max_sum_rate_episode]
 
     # Print or use the values as needed
-    #print(f"Max Sum Rate: {sum_rate_log[max_sum_rate_episode]}")
-    #print(f"Optimal rho_k: {max_rho_k}")
+    print(f"Max_sum_rate_episode: {max_sum_rate_episode}")
+    print(f"Max Sum Rate: {sum_rate_log[max_sum_rate_episode]}")
+    print(f"Optimal rho_k: {max_rho_k[max_sum_rate_episode]}")
     #print(f"Optimal theta_kmn: {max_theta_kmn}")
 
     #file_path = f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}.npy"
@@ -268,11 +267,14 @@ if __name__ == "__main__":
     for i in range(len(instant_rewards)):
         avg_reward[i] = np.sum(instant_rewards[:(i + 1)]) / (i + 1)
     #plt.plot(range(len(instant_rewards)), instant_rewards)
+
+
     plt.plot(range(len(avg_reward)), avg_reward)
     #plt.plot(range(len(cumulative_rewards)), cumulative_rewards)#cumulative_rewards
     plt.xlabel("Episode")
     plt.ylabel("Cumulative Reward")
     plt.title("Cumulative Reward over Episodes")
+    plt.savefig("plot.png")
     plt.show()
 
     if args.save_model:
