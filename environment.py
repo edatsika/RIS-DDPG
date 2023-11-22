@@ -157,8 +157,8 @@ class RIS_DDPG(object):
                 decoded_a_km_values = a_km_values
                 #decoded_a_km_values = (a_km_values + 1) / 2
                 #print(k)
-                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma ** 2)
-                snr_km[k, m] = decoded_a_km_values * (rho_k_values[k]*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma ** 2)
+                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma)
+                snr_km[k, m] = decoded_a_km_values * (rho_k_values[k]*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma)
 
         
         #self.state = np.hstack((init_action, self.a_km.reshape(1,-1), h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))
@@ -192,8 +192,8 @@ class RIS_DDPG(object):
                 # Calculate the SNR for user k and RIS element m (considering all N elements)
                 decoded_a_km_values = a_km_values
                 #decoded_a_km_values = (a_km_values + 1) / 2
-                snr_km[k, m] = decoded_a_km_values * (rho_k_values*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma ** 2)
-                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values) ** 2 / sigma ** 2)
+                snr_km[k, m] = decoded_a_km_values * (rho_k_values*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma)
+                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values) ** 2 / sigma)
                 #print("snr_km[k, m]:", snr_km[k, m])
                 #print("snr_km[k, m]:", snr_km[k, m])
                 #print("rho_k_values:", rho_k_values)
@@ -206,6 +206,8 @@ class RIS_DDPG(object):
         
         # Calculate the sum rate
         sum_rate = self.bandwidth*np.sum(np.log2(1 + snr_km))
+        #print("snr_km:", snr_km)
+        #print("rate:", np.log2(1 + snr_km)/1000000)
         #print("Sum_rate:", sum_rate)
         #reward = sum_rate
         #print("Current reward:", reward)
@@ -220,13 +222,18 @@ class RIS_DDPG(object):
         #print("sum_rate_k:", sum_rate_k/1000000)
         #print("sum_rate:", sum_rate/1000000)
         #print("r_k_min:", r_k_min)
+        #print("rho_k_values:", rho_k_values)
+        #print("powert_t_W:", powert_t_W)
         #print("rate_meets_requirement):", rate_meets_requirement)     
         #if rate_meets_requirement and np.sum(rho_k_values) <= powert_t_W:
-        if rate_meets_requirement and power_meets_requirement:
+        if power_meets_requirement:
+            reward = sum_rate/1000000
+            #print("sum_rate:", sum_rate/1000000)
+        """if rate_meets_requirement and power_meets_requirement:
             reward = sum_rate/1000000  # Positive reward for achieving the goal
             #print("sum_rate:", sum_rate/1000000)
         else:
-            reward = -1.0  # Negative reward for not meeting the requirements
+            reward = -1.0  # Negative reward for not meeting the requirements"""
 
         # Calculate the reward while considering rate constraints
         #reward = sum_rate - np.sum(np.maximum(0, r_k_min - sum_rate))
@@ -300,8 +307,8 @@ class RIS_DDPG(object):
                 # Calculate the SNR for user k and RIS element m (considering all N elements)
                 decoded_a_km_values = a_km_values
                 #decoded_a_km_values = (a_km_values + 1) / 2
-                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma ** 2)
-                snr_km[k, m] = decoded_a_km_values * (rho_k_values[k]*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma ** 2)
+                #snr_km[k, m] = decoded_a_km_values * (np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values) * rho_k_values[k]) ** 2 / sigma)
+                snr_km[k, m] = decoded_a_km_values * (rho_k_values[k]*np.abs(np.sum(self.theta_kmn[k, m, :] * h_km_values * g_km_values)) ** 2 / sigma)
 
 
         self.state = np.hstack((snr_km.reshape(1,-1), a_km, h_kmn_real, h_kmn_imag, g_kmn_real, g_kmn_imag))

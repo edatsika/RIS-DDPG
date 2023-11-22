@@ -34,13 +34,13 @@ if __name__ == "__main__":
     parser.add_argument("--load_model", default="", help='Model load file name; if empty, does not load')
 
     # Environment-specific parameters
-    parser.add_argument("--num_RIS", default=2, type=int, metavar='N', help='Number of antennas in the BS')
+    parser.add_argument("--num_RIS", default=4, type=int, metavar='N', help='Number of antennas in the BS')
     parser.add_argument("--num_RIS_elements", default=10, type=int, metavar='N', help='Number of RIS elements')
-    parser.add_argument("--num_users", default=2, type=int, metavar='N', help='Number of users')
-    parser.add_argument("--power_t", default=0, type=float, metavar='N', help='Transmission power for the constrained optimization in dBm (default: 30)')
-    parser.add_argument("--num_time_steps_per_eps", default=500, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
+    parser.add_argument("--num_users", default=4, type=int, metavar='N', help='Number of users')
+    parser.add_argument("--power_t", default=20, type=float, metavar='N', help='Transmission power for the constrained optimization in dBm (default: 30)')
+    parser.add_argument("--num_time_steps_per_eps", default=300, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
     parser.add_argument("--num_eps", default=10, type=int, metavar='N', help='Maximum number of episodes (default: 5000)')
-    parser.add_argument("--awgn_var", default=1e-2, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 1e-2)')
+    parser.add_argument("--awgn_var", default=1e-5, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 1e-2)')
     parser.add_argument("--channel_est_error", default=False, type=bool, help='Noisy channel estimate? (default: False)')
     parser.add_argument("--bandwidth", default=2*1000000, type=float, help='Channel bandwidth (default: 5 MHz)')
 
@@ -237,8 +237,8 @@ if __name__ == "__main__":
 
     # Print or use the values as needed
     print(f"Max_sum_rate_episode: {max_sum_rate_episode}")
-    print(f"Max Sum Rate: {sum_rate_log[max_sum_rate_episode]}")
-    print(f"Optimal rho_k: {max_rho_k[max_sum_rate_episode]}")
+    print(f"Max Sum Rate (Mb/s): {sum_rate_log[max_sum_rate_episode]}")
+    #print(f"Optimal rho_k: {max_rho_k[max_sum_rate_episode]}")
     #print(f"Optimal theta_kmn: {max_theta_kmn}")
 
     #file_path = f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}.npy"
@@ -261,6 +261,37 @@ if __name__ == "__main__":
     #plt.ylabel("Reward")
     #plt.title("Reward for All Steps and Episodes")
     #plt.show()
+    
+    """
+    # Instant rewards
+    plt.figure(figsize=(10, 6))
+    # Check if there are no -1 values in the entire array
+    instant_rewards_array = np.array(instant_rewards)
+    #if all(value > 0 for value in instant_rewards):
+    if np.all(instant_rewards_array >0):
+        print("No -1 values found.")
+        for eps in range(int(args.num_eps)):
+            valid_rewards = instant_rewards[eps]
+            valid_steps = np.arange(int(args.num_time_steps_per_eps))
+            plt.plot(valid_steps, valid_rewards, label=f'Episode {eps + 1}')
+        #print(instant_rewards)
+    else:
+        # Plotting
+        positive_rewards = []
+        positive_steps = []
+        for episode in range(int(args.num_eps)):
+            for step in range(int(args.num_time_steps_per_eps)):
+                if instant_rewards[episode][step] > 0:
+                    positive_rewards.append(instant_rewards[episode][step])
+                    positive_steps.append(step + 1)  # Assuming steps are 1-indexed
+                    positive_rewards.sort()
+
+    plt.plot(positive_steps, positive_rewards, marker='o', linestyle='-', label='Positive Rewards')
+    plt.xlabel('Step')
+    plt.ylabel('Instantaneous Reward')
+    plt.title('Instantaneous Reward over Steps in Each Episode')
+    plt.legend()
+    plt.show()"""
 
     # Plot cumulative reward over episodes
     #plt.plot(range(int(args.num_eps)), instant_rewards)#cumulative_rewards
@@ -270,6 +301,10 @@ if __name__ == "__main__":
         avg_reward[i] = np.sum(instant_rewards[:(i + 1)]) / (i + 1)
     #plt.plot(range(len(instant_rewards)), instant_rewards)
 
+    print("avg_rewards array:", avg_reward.shape)
+    print("instant_rewards array:", len(instant_rewards))
+
+    # Average reward
 
     plt.plot(range(len(avg_reward)), avg_reward)
     #plt.plot(range(len(cumulative_rewards)), cumulative_rewards)#cumulative_rewards
