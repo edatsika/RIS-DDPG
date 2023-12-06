@@ -80,7 +80,7 @@ class RIS_DDPG(object):
         #self.rho_k = np.zeros(self.K, dtype=float)
 
         #self.rho_k = np.random.uniform(0, powert_t_W, size=(self.K,))
-        self.rho_k_min = 0.0001  # Minimum allowable transmission power (adjust as needed)
+        self.rho_k_min = 0.0000001  # Minimum allowable transmission power -40 dBm (adjust as needed)
         self.rho_k = np.random.uniform(self.rho_k_min, power_t_W, size=(self.K,))
 
         #print("Dimensions of self.a_km:", self.a_km.shape)
@@ -225,16 +225,26 @@ class RIS_DDPG(object):
         #print("rho_k_values:", rho_k_values)
         #print("powert_t_W:", powert_t_W)
         #print("rate_meets_requirement):", rate_meets_requirement)     
+
+
         #if rate_meets_requirement and np.sum(rho_k_values) <= powert_t_W:
-        if power_meets_requirement:
-            reward = sum_rate/1000000
-            #print("sum_rate:", sum_rate/1000000)
+        #if rate_meets_requirement and power_meets_requirement:
+        if rate_meets_requirement:
+            c = 0
+        else:
+            c = self.K
+        xi_k = 10 # scale according to sum rate
+        reward = sum_rate/1000000 - c*xi_k/1000000
+        #print("sum_rate:", sum_rate/1000000)
+        #print("reward:", reward)
+            #print("sum_rate:", sum_rate/1000000) """
+        #reward = sum_rate/1000000
         """if rate_meets_requirement and power_meets_requirement:
             reward = sum_rate/1000000  # Positive reward for achieving the goal
             #print("sum_rate:", sum_rate/1000000)
         else:
             reward = -1.0  # Negative reward for not meeting the requirements"""
-
+        
         # Calculate the reward while considering rate constraints
         #reward = sum_rate - np.sum(np.maximum(0, r_k_min - sum_rate))
         #print("Current reward:", reward)
@@ -248,9 +258,17 @@ class RIS_DDPG(object):
         # Separate the action into different components
         rho_k = action[0,:self.K].copy()  # Extract and make a copy of transmission power values
         Pmax = 10 ** (power_t / 10) * 1e-3
-        #print("----------------")
+        #print("??????????????")
         while np.sum(rho_k) > Pmax or (rho_k < 0).any():
             rho_k = np.random.uniform(1e-4, Pmax, size=(self.K,))
+
+        #while np.sum(rho_k) > Pmax or (rho_k < 0).any():
+        #    rho_k = np.random.uniform(1e-4, Pmax, size=(self.K,))
+
+        #if (rho_k > Pmax).any() or (rho_k < 0).any():
+        #    print(rho_k)
+            #rho_k = np.random.uniform(1e-4, Pmax, size=(self.K,))
+            
         #while np.sum(rho_k) > Pmax:
         # If the sum exceeds Pmax, resample rho_k
         #     rho_k = np.random.uniform(0.1, Pmax, size=(self.K,))

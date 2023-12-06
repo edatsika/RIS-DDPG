@@ -38,7 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_RIS_elements", default=10, type=int, metavar='N', help='Number of RIS elements')
     parser.add_argument("--num_users", default=4, type=int, metavar='N', help='Number of users')
     parser.add_argument("--power_t", default=20, type=float, metavar='N', help='Transmission power for the constrained optimization in dBm (default: 30)')
-    parser.add_argument("--num_time_steps_per_eps", default=300, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
+    parser.add_argument("--num_time_steps_per_eps", default=100, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
     parser.add_argument("--num_eps", default=10, type=int, metavar='N', help='Maximum number of episodes (default: 5000)')
     parser.add_argument("--awgn_var", default=1e-5, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 1e-2)')
     parser.add_argument("--channel_est_error", default=False, type=bool, help='Noisy channel estimate? (default: False)')
@@ -199,9 +199,11 @@ if __name__ == "__main__":
                 state = whiten(state)
 
                 instant_rewards.append(eps_rewards)
+                #instant_rewards.append(reward) #??????????????????
 
                 # commented by edatsika
                 #np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", instant_rewards)
+                np.save('instant_rewards.npy', instant_rewards)
         
         cumulative_rewards.append(episode_reward)
     
@@ -238,7 +240,7 @@ if __name__ == "__main__":
     # Print or use the values as needed
     print(f"Max_sum_rate_episode: {max_sum_rate_episode}")
     print(f"Max Sum Rate (Mb/s): {sum_rate_log[max_sum_rate_episode]}")
-    #print(f"Optimal rho_k: {max_rho_k[max_sum_rate_episode]}")
+    print(f"Optimal rho_k: {max_rho_k[max_sum_rate_episode]}")
     #print(f"Optimal theta_kmn: {max_theta_kmn}")
 
     #file_path = f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}.npy"
@@ -295,6 +297,9 @@ if __name__ == "__main__":
 
     # Plot cumulative reward over episodes
     #plt.plot(range(int(args.num_eps)), instant_rewards)#cumulative_rewards
+
+    
+
     avg_reward = np.zeros_like(instant_rewards)
 
     for i in range(len(instant_rewards)):

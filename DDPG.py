@@ -24,13 +24,25 @@ class Actor(nn.Module):
         self.M = M
         self.N = N
         self.K = K
-        self.power_t = power_t
+        self.power_t = power_t # in dB
+
+        #powert_t_W = 10 ** (power_t / 10)
+        rho_dim = self.K
+        theta_dim = self.K*self.M*self.N
+        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.fc2_rho = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3_rho = nn.Linear(hidden_dim, rho_dim)
+        self.fc2_theta_real = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3_theta_real = nn.Linear(hidden_dim, theta_dim)
+        self.fc2_theta_imag = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3_theta_imag = nn.Linear(hidden_dim, theta_dim)
+        #self.Pmax = Pmax
 
         self.l1 = nn.Linear(state_dim, hidden_dim)
         self.l2 = nn.Linear(hidden_dim, action_dim)
 
         self.max_action = max_action
-        self.hidden_dim = hidden_dim
+        #self.hidden_dim = hidden_dim
 
 
     def forward(self, state):          
@@ -42,7 +54,42 @@ class Actor(nn.Module):
         #    if 'weight' in name:
                 #print(f"Layer: {name}, Shape: {param.shape}")
 
-        a = torch.tanh(self.l1(state.float()))
+        a = torch.relu(self.fc1(state))
+
+        # Output for transmission power array (rho_k)
+        power_t_W = 10 ** (self.power_t / 10) * 1e-3
+        a_rho = torch.relu(self.fc2_rho(a))
+        a_rho = torch.sigmoid(self.fc3_rho(a_rho))  # Scaled between 0 and 1
+        rho_k = power_t_W * a_rho  # Ensure positive and less than Pmax
+
+        # Output for angle array (theta_kmn)
+        a_theta_real = torch.relu(self.fc2_theta_real(a))
+        a_theta_imag = torch.relu(self.fc2_theta_imag(a))
+        
+        # Sigmoid activation for real and imaginary parts
+        a_theta_real = torch.sigmoid(self.fc3_theta_real(a_theta_real))
+        a_theta_imag = torch.sigmoid(self.fc3_theta_imag(a_theta_imag))
+
+        # Combine real and imaginary parts to form complex numbers
+        theta_kmn = torch.stack((a_theta_real, a_theta_imag), dim=-1)  # Shape: (batch_size, theta_dim, 2)
+
+        #print(rho_k.shape)
+        #print(theta_kmn.shape)
+        # Reshape theta_kmn to (batch_size, theta_dim * 2)
+        theta_kmn_flat = theta_kmn.view(theta_kmn.size(0), -1)
+
+        # Concatenate rho_k and flattened theta_kmn along the last dimension
+        a = torch.cat((rho_k, theta_kmn_flat), dim=-1)  # Shape: (batch_size, ...)
+
+        #print(rho_k)
+        #print("#########")
+        #print(theta_kmn)
+
+        return a
+
+
+
+        """a = torch.tanh(self.l1(state.float()))
         #a = self.l1(state.float())
         #print("a shape in FW:", a.shape)
         nan_indices = np.isnan(a.detach())
@@ -51,35 +98,16 @@ class Actor(nn.Module):
             print("Inside FW after l1:", a)
             input("Press Enter to continue...")
 
-
-        #------------REMOVE THIS???
-        # Normalize power so that sum(rho_k) <= P_Tx_max
         rho_k_from_a = a[:, :self.K].detach()
         sum_rho_k = torch.sum(rho_k_from_a, dim=0)
         normalized_rho_k = rho_k_from_a * (self.power_t / sum_rho_k)
-        #rho_k_from_a_2 = a[:, :self.K]
-        #print("--------------- sum_rho_k shape is ",  sum_rho_k.shape)
-        #print("---------------rho_k_from_a")
-        #print(rho_k_from_a) 
-        #print("---------------normalized_rho_k")
-        #print(normalized_rho_k) 
 
-        #division_term = torch.cat([current_power_t, normalized_rho_k], dim=1)
-        #division_term = torch.cat([normalized_rho_k, a_km_from_a], dim=1)
         theta_kmn_real = a[:, self.K:self.K+self.K*self.M*self.N].detach()
         theta_kmn_imag = a[:, self.K*self.M*self.N:2*self.K*self.M*self.N].detach()
-        #print(normalized_rho_k.shape) 
-        #print(theta_kmn_real.shape) 
-        #print(theta_kmn_imag.shape) 
+ 
         division_term = torch.cat([normalized_rho_k, theta_kmn_real, theta_kmn_imag], dim=1)
-        #print(division_term .shape)
-        #input("NaN - Press Enter to continue...")
-        #return a
-        #nan_indices = np.isnan(a.detach())
-        #if nan_indices.any():
-        #    print("Inside FW:", a)
-        #return self.max_action * a / division_term
-        return torch.sigmoid(self.l2(a))
+
+        return torch.sigmoid(self.l2(a))"""
 
 
 class Critic(nn.Module):
