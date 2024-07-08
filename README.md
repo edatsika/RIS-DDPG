@@ -5,10 +5,8 @@ This is a modified version of the PyTorch implementation of the paper [*Reconfig
 The algorithm is tested, and the results are reproduced on a custom RIS-assisted multiuser environment.
 
 ## Description
-This version solves the sum rate maximization problem in a multiple RIS-assisted wireless network. It allocates the transmission power of multiple users in uplink scenario and configures the phase shifts of multiple RISs, considering the maximum acceptable transmission power per user constraint and the minimum acceptable data rate per user constraint. Two-layer neural networks are used for both actor and critic. The files that have been modified are *main.py*, *environment.py* and *DDPG.py*. 
+This version solves the sum rate maximization problem in a multiple RIS-assisted wireless network. Focusing on the uplink scenario, the method associates users with the available RISs, allocates the transmission power of multiple users and configures the phase shifts of multiple RISs. The maximum acceptable transmission power per user constraint and the minimum acceptable data rate per user constraint are considered. Two-layer neural networks are used for both actor and critic. The files that have been modified are *main.py*, *environment.py* and *DDPG.py*. 
 
-### Results
-The algorithm is currently under testing. 
 
 ### Run
 **0. Requirements**
