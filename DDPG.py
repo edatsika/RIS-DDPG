@@ -14,100 +14,66 @@ class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, M, N, K, power_t, device, max_action=1):
         super(Actor, self).__init__()
         hidden_dim = 1 if state_dim == 0 else 2 ** (state_dim - 1).bit_length()
-        #hidden_dim = state_dim
-        #print("action_dim:", action_dim)
-        #print("state_dim:", state_dim)
-        #print("hidden_dim:", hidden_dim)
 
         self.device = device
 
         self.M = M
         self.N = N
         self.K = K
-        self.power_t = power_t # in dB
+        self.power_t = power_t  # in dB
 
-        #powert_t_W = 10 ** (power_t / 10)
         rho_dim = self.K
-        theta_dim = self.K*self.M*self.N
-        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        theta_dim = 2 * self.K * self.M * self.N  # Factor of 2 for real and imaginary parts
+        a_dim = self.K * self.M  # Binary association variable
+
+        # Define layers for rho_k
+        self.fc1_rho = nn.Linear(state_dim, hidden_dim)
         self.fc2_rho = nn.Linear(hidden_dim, hidden_dim)
         self.fc3_rho = nn.Linear(hidden_dim, rho_dim)
-        self.fc2_theta_real = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3_theta_real = nn.Linear(hidden_dim, theta_dim)
-        self.fc2_theta_imag = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3_theta_imag = nn.Linear(hidden_dim, theta_dim)
-        #self.Pmax = Pmax
 
-        self.l1 = nn.Linear(state_dim, hidden_dim)
-        self.l2 = nn.Linear(hidden_dim, action_dim)
+        # Define layers for theta_kmn (real and imaginary parts separately)
+        self.fc1_theta_real = nn.Linear(state_dim, hidden_dim)
+        self.fc2_theta_real = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3_theta_real = nn.Linear(hidden_dim, theta_dim // 2)
+
+        self.fc1_theta_imag = nn.Linear(state_dim, hidden_dim)
+        self.fc2_theta_imag = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3_theta_imag = nn.Linear(hidden_dim, theta_dim // 2)
+
+        # Define layers for a_km (mapped to continuous space)
+        self.fc1_a = nn.Linear(state_dim, hidden_dim)
+        self.fc2_a = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3_a = nn.Linear(hidden_dim, a_dim)
 
         self.max_action = max_action
-        #self.hidden_dim = hidden_dim
 
+    def forward(self, state):
+        # Forward pass for rho_k
+        x_rho = F.relu(self.fc1_rho(state))
+        x_rho = F.relu(self.fc2_rho(x_rho))
+        rho_k = torch.sigmoid(self.fc3_rho(x_rho)) * self.max_action
 
-    def forward(self, state):          
+        # Forward pass for theta_kmn (real part)
+        x_theta_real = F.relu(self.fc1_theta_real(state))
+        x_theta_real = F.relu(self.fc2_theta_real(x_theta_real))
+        theta_kmn_real = torch.tanh(self.fc3_theta_real(x_theta_real))
 
-        #print("Input Shape:", state.shape)
-        actor_state_dict = self.state_dict()
-        # Print the weight tensors in the actor network
-        #for name, param in actor_state_dict.items():
-        #    if 'weight' in name:
-                #print(f"Layer: {name}, Shape: {param.shape}")
+        # Forward pass for theta_kmn (imaginary part)
+        x_theta_imag = F.relu(self.fc1_theta_imag(state))
+        x_theta_imag = F.relu(self.fc2_theta_imag(x_theta_imag))
+        theta_kmn_imag = torch.tanh(self.fc3_theta_imag(x_theta_imag))
 
-        a = torch.relu(self.fc1(state))
+        # Forward pass for a_km (mapped to [-1, 1])
+        x_a = F.relu(self.fc1_a(state))
+        x_a = F.relu(self.fc2_a(x_a))
+        a_km_continuous = torch.tanh(self.fc3_a(x_a))  # Outputs in range [-1, 1]
 
-        # Output for transmission power array (rho_k)
-        power_t_W = 10 ** (self.power_t / 10) * 1e-3
-        a_rho = torch.relu(self.fc2_rho(a))
-        a_rho = torch.sigmoid(self.fc3_rho(a_rho))  # Scaled between 0 and 1
-        rho_k = power_t_W * a_rho  # Ensure positive and less than Pmax
-
-        # Output for angle array (theta_kmn)
-        a_theta_real = torch.relu(self.fc2_theta_real(a))
-        a_theta_imag = torch.relu(self.fc2_theta_imag(a))
+        # Concatenate rho_k, theta_kmn_real, theta_kmn_imag, and a_km_continuous
+        action = torch.cat([rho_k, theta_kmn_real, theta_kmn_imag, a_km_continuous], dim=-1)
         
-        # Sigmoid activation for real and imaginary parts
-        a_theta_real = torch.sigmoid(self.fc3_theta_real(a_theta_real))
-        a_theta_imag = torch.sigmoid(self.fc3_theta_imag(a_theta_imag))
+        return action
+    
 
-        # Combine real and imaginary parts to form complex numbers
-        theta_kmn = torch.stack((a_theta_real, a_theta_imag), dim=-1)  # Shape: (batch_size, theta_dim, 2)
-
-        #print(rho_k.shape)
-        #print(theta_kmn.shape)
-        # Reshape theta_kmn to (batch_size, theta_dim * 2)
-        theta_kmn_flat = theta_kmn.view(theta_kmn.size(0), -1)
-
-        # Concatenate rho_k and flattened theta_kmn along the last dimension
-        a = torch.cat((rho_k, theta_kmn_flat), dim=-1)  # Shape: (batch_size, ...)
-
-        #print(rho_k)
-        #print("#########")
-        #print(theta_kmn)
-
-        return a
-
-
-
-        """a = torch.tanh(self.l1(state.float()))
-        #a = self.l1(state.float())
-        #print("a shape in FW:", a.shape)
-        nan_indices = np.isnan(a.detach())
-        if nan_indices.any():
-            print("Inside FW after l1 (state before l1):", state.float())
-            print("Inside FW after l1:", a)
-            input("Press Enter to continue...")
-
-        rho_k_from_a = a[:, :self.K].detach()
-        sum_rho_k = torch.sum(rho_k_from_a, dim=0)
-        normalized_rho_k = rho_k_from_a * (self.power_t / sum_rho_k)
-
-        theta_kmn_real = a[:, self.K:self.K+self.K*self.M*self.N].detach()
-        theta_kmn_imag = a[:, self.K*self.M*self.N:2*self.K*self.M*self.N].detach()
- 
-        division_term = torch.cat([normalized_rho_k, theta_kmn_real, theta_kmn_imag], dim=1)
-
-        return torch.sigmoid(self.l2(a))"""
 
 
 class Critic(nn.Module):

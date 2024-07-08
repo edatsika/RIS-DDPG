@@ -34,11 +34,11 @@ if __name__ == "__main__":
     parser.add_argument("--load_model", default="", help='Model load file name; if empty, does not load')
 
     # Environment-specific parameters
-    parser.add_argument("--num_RIS", default=4, type=int, metavar='N', help='Number of antennas in the BS')
-    parser.add_argument("--num_RIS_elements", default=10, type=int, metavar='N', help='Number of RIS elements')
-    parser.add_argument("--num_users", default=4, type=int, metavar='N', help='Number of users')
+    parser.add_argument("--num_RIS", default=2, type=int, metavar='N', help='Number of antennas in the BS')
+    parser.add_argument("--num_RIS_elements", default=32, type=int, metavar='N', help='Number of RIS elements')
+    parser.add_argument("--num_users", default=2, type=int, metavar='N', help='Number of users')
     parser.add_argument("--power_t", default=20, type=float, metavar='N', help='Transmission power for the constrained optimization in dBm (default: 30)')
-    parser.add_argument("--num_time_steps_per_eps", default=100, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
+    parser.add_argument("--num_time_steps_per_eps", default=2000, type=int, metavar='N', help='Maximum number of steps per episode (default: 10000)')
     parser.add_argument("--num_eps", default=10, type=int, metavar='N', help='Maximum number of episodes (default: 5000)')
     parser.add_argument("--awgn_var", default=1e-5, type=float, metavar='G', help='Variance of the additive white Gaussian noise (default: 1e-2)')
     parser.add_argument("--channel_est_error", default=False, type=bool, help='Noisy channel estimate? (default: False)')
@@ -137,19 +137,10 @@ if __name__ == "__main__":
         for t in range(int(args.num_time_steps_per_eps)):
             # Choose action from the policy
             action = agent.select_action(np.array(state))
-            #print(f">>>>>>>>>>>>>>>>>>>>>> Episode {eps}, Step {t}, Action shape {action.shape}, Action before: {action[:, :env.K]}")
-            #print(f">>>>>>>>>>>>>>>>>>>>>> State shape {state.shape}, State before: {state[:env.K]}")
-            #if np.any(state[:env.K] < 0):
-            #    input("Press Enter to continue...")
+
             # Take the selected action
             next_state, reward, done, _ = env.step(action, args.power_t)
-            #print(f">>>>>>>>>>>>>>>>>>>>>> Episode {eps}, Step {t}, Action shape {action.shape}, Action after env.step in main: {action}")
-            #print(f">>>>>>>>>>>>>>>>>>>>>> State shape {state.shape}, State after env.step in main: {state[:env.K]}")
-            #print("rho_k values after step:", env.rho_k)
-            #input("Press Enter to continue...")
-            #print("theta_kmn values after step:", env.theta_kmn)
 
-            #edatsika
             episode_rho_k_log.append(env.rho_k)
             episode_theta_kmn_log.append(env.theta_kmn)
 
@@ -167,7 +158,7 @@ if __name__ == "__main__":
 
             state = next_state
             episode_reward += reward
-            #edatsika
+      
             episode_sum_rate += reward
 
             state = whiten(state)
@@ -178,19 +169,12 @@ if __name__ == "__main__":
             # Train the agent
             agent.update_parameters(replay_buffer, args.batch_size)
 
-            #print(f"Time step: {t + 1} Episode Num: {episode_num + 1} Reward: {reward:.3f}")
-
             eps_rewards.append(reward)
 
             episode_time_steps += 1
 
-            #edatsika
-            #cumulative_reward += max_reward
-
             if done:
-                #print(f"\nTotal T: {t + 1} Episode Num: {episode_num + 1} Episode T: {episode_time_steps} Max. Reward: {max_reward:.3f}\n")
-                #print(f"\nEpisode Num: {eps} Episode T: {t} Max. Reward: {max_reward:.3f}\n")
-                # Reset the environment
+
                 state, done = env.reset(), False
                 episode_reward = 0
                 episode_time_steps = 0
@@ -199,12 +183,11 @@ if __name__ == "__main__":
                 state = whiten(state)
 
                 instant_rewards.append(eps_rewards)
-                #instant_rewards.append(reward) #??????????????????
+              
+                # Convert to numpy array with dtype=object
+                instant_rewards_arr = np.array(instant_rewards, dtype=object)
+                np.save('instant_rewards.npy', instant_rewards_arr)
 
-                # commented by edatsika
-                #np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", instant_rewards)
-                np.save('instant_rewards.npy', instant_rewards)
-        
         cumulative_rewards.append(episode_reward)
     
         rho_k_log.append(episode_rho_k_log)
@@ -212,24 +195,7 @@ if __name__ == "__main__":
         sum_rate_log.append(episode_sum_rate)
         print(f"\nTotal T steps completed: {t} Episode Num: {eps} Max. Reward: {max_reward:.6f}\n")
         
-        # Save aggregated statistics every N episodes
-        """episode_rewards.append(cumulative_reward)
-        if (episode_num + 1) % save_interval == 0:
-            mean_reward = np.mean(episode_rewards[-save_interval:])  # Calculate mean of last N episodes
-            std_reward = np.std(episode_rewards[-save_interval:])    # Calculate standard deviation
-            aggregated_stats = {
-                'episode': episode_num + 1,
-                'mean_reward': mean_reward,
-                'std_reward': std_reward
-            }
-            #np.save('aggregated_stats.npy', aggregated_stats)
-            try:
-                np.save(f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}", aggregated_stats)
-            except Exception as e:
-                # Print the exception or handle it as needed
-                print(f"Error saving results: {e}")"""
-    
-    #edatsika
+
     # After training, identify the episode with the maximum sum_rate
     max_sum_rate_episode = np.argmax(sum_rate_log) #------------------- print optimal values
 
@@ -241,64 +207,6 @@ if __name__ == "__main__":
     print(f"Max_sum_rate_episode: {max_sum_rate_episode}")
     print(f"Max Sum Rate (Mb/s): {sum_rate_log[max_sum_rate_episode]}")
     print(f"Optimal rho_k: {max_rho_k[max_sum_rate_episode]}")
-    #print(f"Optimal theta_kmn: {max_theta_kmn}")
-
-    #file_path = f"./Learning Curves/{args.experiment_type}/{file_name}_episode_{episode_num + 1}.npy"
-    #loaded_data = np.load(file_path, allow_pickle=True) put back causes error
-    #print(loaded_data)
-    
-    # edatsika
-    # Convert the rewards list to a NumPy array for further analysis or plotting
-    #rewards_array = np.array(instant_rewards)
-    #print("Rewards array:", rewards_array.shape)
-    #print("Rewards array:", cumulative_rewards)
-
-    # Create x-axis values for all steps and episodes
-    # Flatten rewards_array
-    #flat_rewards = rewards_array.flatten()
-    # Plot the rewards for all steps and episodes
-    #x_values = np.arange(flat_rewards.shape[0])
-    #plt.plot(x_values, flat_rewards)
-    #plt.xlabel("Step and Episode")
-    #plt.ylabel("Reward")
-    #plt.title("Reward for All Steps and Episodes")
-    #plt.show()
-    
-    """
-    # Instant rewards
-    plt.figure(figsize=(10, 6))
-    # Check if there are no -1 values in the entire array
-    instant_rewards_array = np.array(instant_rewards)
-    #if all(value > 0 for value in instant_rewards):
-    if np.all(instant_rewards_array >0):
-        print("No -1 values found.")
-        for eps in range(int(args.num_eps)):
-            valid_rewards = instant_rewards[eps]
-            valid_steps = np.arange(int(args.num_time_steps_per_eps))
-            plt.plot(valid_steps, valid_rewards, label=f'Episode {eps + 1}')
-        #print(instant_rewards)
-    else:
-        # Plotting
-        positive_rewards = []
-        positive_steps = []
-        for episode in range(int(args.num_eps)):
-            for step in range(int(args.num_time_steps_per_eps)):
-                if instant_rewards[episode][step] > 0:
-                    positive_rewards.append(instant_rewards[episode][step])
-                    positive_steps.append(step + 1)  # Assuming steps are 1-indexed
-                    positive_rewards.sort()
-
-    plt.plot(positive_steps, positive_rewards, marker='o', linestyle='-', label='Positive Rewards')
-    plt.xlabel('Step')
-    plt.ylabel('Instantaneous Reward')
-    plt.title('Instantaneous Reward over Steps in Each Episode')
-    plt.legend()
-    plt.show()"""
-
-    # Plot cumulative reward over episodes
-    #plt.plot(range(int(args.num_eps)), instant_rewards)#cumulative_rewards
-
-    
 
     avg_reward = np.zeros_like(instant_rewards)
 
@@ -308,16 +216,6 @@ if __name__ == "__main__":
 
     print("avg_rewards array:", avg_reward.shape)
     print("instant_rewards array:", len(instant_rewards))
-
-    # Average reward
-
-    plt.plot(range(len(avg_reward)), avg_reward)
-    #plt.plot(range(len(cumulative_rewards)), cumulative_rewards)#cumulative_rewards
-    plt.xlabel("Episode")
-    plt.ylabel("Cumulative Reward")
-    plt.title("Cumulative Reward over Episodes")
-    plt.savefig("plot.png")
-    plt.show()
 
     if args.save_model:
         agent.save(f"./Models/{file_name}")
